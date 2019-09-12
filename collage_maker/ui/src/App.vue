@@ -2,10 +2,15 @@
   <div style="height: 100%">
     <input id="github-key" v-model="gitHubKey" placeholder="Please type the GitHub access key">
     <input id="search-input" v-model="searchQuery" placeholder="Please type a name of any github project">
-    <button id="search-button" @click="makeCollage" :disabled="makingCollageProcess">Make a collage</button>
+    <button id="search-button"
+      @click="makeCollage"
+      :disabled="!gitHubKey || !searchQuery || makingCollageProcess">Make a collage</button>
     <div id="collage-container">
       <img id="collage" :src="collageData" v-show="collageData">
       <div class="spinner" v-show="makingCollageProcess"></div>
+      <div class="errors">
+        <div class="error" v-for="error in errors">{{error}}</div>
+      </div>
     </div>
   </div>
 </template>
@@ -15,9 +20,10 @@
         data() {
             return {
                 searchQuery: '',
-                gitHubKey: '40367a4217d32dd7d6aa4ab3eacf656b199e645f',
+                gitHubKey: '',
                 collageData: null,
-                makingCollageProcess: false
+                makingCollageProcess: false,
+                errors: []
             }
         },
         methods: {
@@ -53,20 +59,26 @@
                             setTimeout(this.checkMakeCollageStatus.bind(null, { id }), 1000)
 
                         } else if (data.status === 'done') {
-                            fetch(`http://127.0.0.1:8787/collage/${id}/`)
-                              .then(response => response.arrayBuffer())
-                              .then(buffer => {
-                                  var base64Flag = 'data:image/jpeg;base64,';
-                                  var imageStr = this.arrayBufferToBase64(buffer);
+                            this.fetchCollage(id)
 
-                                  this.collageData = base64Flag + imageStr;
-                              })
-                              .finally(() => {
-                                  this.makingCollageProcess = false;
-                              })
-                              .catch(() => {})
+                        } else if (data.status === 'error') {
+                            this.errors.push('Something went wrong...');
+                            this.makingCollageProcess = false;
                         }
-                    });
+                    })
+                    .catch(() => { this.makingCollageProcess = false; });
+            },
+            fetchCollage(id) {
+                fetch(`http://127.0.0.1:8787/collage/${id}/`)
+                    .then(response => response.arrayBuffer())
+                    .then(buffer => {
+                        var base64Flag = 'data:image/jpeg;base64,';
+                        var imageStr = this.arrayBufferToBase64(buffer);
+
+                        this.collageData = base64Flag + imageStr;
+                    })
+                    .finally(() => { this.makingCollageProcess = false; })
+                    .catch(() => {})
             }
         }
     }
@@ -106,5 +118,13 @@
     height: 96px;
     background: url("spinner.gif") no-repeat;
     background-size: 96px 96px;
+  }
+
+  .errors {
+    position: relative;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #804947;
+    font-size: 1.3em;
   }
 </style>

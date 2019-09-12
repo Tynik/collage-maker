@@ -1,6 +1,5 @@
 import io
 import zmq
-import math
 import uuid
 import time
 import base64
@@ -9,6 +8,7 @@ import typing
 import logging
 import requests
 import threading
+import functools
 
 from PIL import Image, ImageDraw
 from github import Github
@@ -26,7 +26,7 @@ _COLLAGES = {}
 class Collage:
     __slots__ = ('_x', '_y', '_img', '_size')
 
-    def __init__(self, *, size=()):
+    def __init__(self, *, size: tuple):
         self._size = size
         self._img = Image.new('RGBA', size, (255, 0, 0, 0))
 
@@ -42,35 +42,68 @@ class Collage:
         return output
 
 
-def fetch_contributors_avatars(*, stats_chunks: typing.List[tuple], max_total_commits: int, collage: Collage):
-    for avatar_url, total_commits in stats_chunks:
-        img_response = requests.get(avatar_url, stream=True)
-        if img_response.status_code != 200:
-            continue
+def handle_avatar_image_size(
+    min_avatar_size: tuple, max_avatar_size: tuple, total_commits: int, max_total_commits: int
+):
+    new_width = min_avatar_size[0] + (
+        max_avatar_size[0] - min_avatar_size[0]) * int(total_commits / max_total_commits)
+    new_height = min_avatar_size[1] + (
+        max_avatar_size[0] - min_avatar_size[1]) * int(total_commits / max_total_commits)
 
-        c = 64 + (128 - 64) * int(total_commits / max_total_commits)
-        img = Image.open(img_response.raw)
-        img.thumbnail((c, c))
-        img_with_margins = Image.new('RGB', (c + 5 * 2, c + 5 * 2), (255, 255, 255))
-        draw = ImageDraw.Draw(img_with_margins)
-        draw.rectangle(((0, 0), (c + 5 * 2 - 1, c + 5 * 2 - 1)), outline=(76, 76, 76), width=1)
-        img_with_margins.paste(img, (5, 5))
+    return new_width, new_height
 
-        collage.add_img(img_with_margins)
+
+def handle_avatar_image(img_data, margins: tuple, avatar_image_size_handler):
+    new_width, new_height = avatar_image_size_handler()
+
+    avatar_img = Image.open(img_data)
+    avatar_img.thumbnail((new_width, new_height))
+
+    avatar_img_with_margins = Image.new('RGB', (
+        new_width + margins[0] * 2, new_height + margins[1] * 2), (255, 255, 255))
+
+    # draw borders over the avatar
+    draw = ImageDraw.Draw(avatar_img_with_margins)
+    draw.rectangle((
+            # x
+            (0, 0),
+            # y
+            (new_width + margins[0] * 2 - 1, new_height + margins[1] * 2 - 1)),
+        outline=(76, 76, 76), width=1)
+
+    avatar_img_with_margins.paste(avatar_img, margins)
+    return avatar_img_with_margins
+
+
+def fetch_avatars(*, contributors_stats, max_fetch_avatars_per_thread: int, handler: callable, timeout=60):
+    def loader(*, stats_chunk: typing.List[tuple]):
+        for avatar_url, total_commits in stats_chunk:
+            img_response = requests.get(avatar_url, stream=True)
+            if img_response.status_code != 200:
+                continue
+
+            handler(img_data=img_response.raw, total_commits=total_commits)
+
+    tasks = TasksList()
+    stats_chunks = divide_chunks(contributors_stats, max_fetch_avatars_per_thread)
+    for stats_chunk in stats_chunks:
+        tasks.add(target=loader, kwargs={'stats_chunk': stats_chunk}).start()
+
+    tasks.wait(timeout=timeout)
 
 
 class ContributorsStats:
     def __init__(self, repositories, threads_number=1):
         self._repositories = repositories
         self._threads_number = threads_number
-        self._tasks = TasksList()
         self._result = []
 
     def fetch(self, timeout=60):
+        tasks = TasksList()
         for reps_chunk in divide_chunks(self._repositories, self._threads_number):
-            self._tasks.add(target=self._fetch_stats_contributors, args=(reps_chunk, self._result)).start()
+            tasks.add(target=self._fetch_stats_contributors, args=(reps_chunk, self._result)).start()
 
-        self._tasks.wait(timeout=timeout)
+        tasks.wait(timeout=timeout)
 
     def get_result(self):
         return self._result
@@ -89,7 +122,8 @@ class ContributorsStats:
 
 
 def make_collage(collage_id: str, *, git_hub_key: str, q: str, size: tuple):
-    _COLLAGES[collage_id] = {'status': 'in_progress', 'collage': Collage(size=size)}
+    collage = Collage(size=size)
+    _COLLAGES[collage_id] = {'status': 'in_progress', 'collage': collage}
     try:
         git_hub = Github(git_hub_key)
         searched_reps = list(git_hub.search_repositories(q)[:settings.MAX_FETCH_REPOSITORIES_NUMBER])
@@ -100,17 +134,24 @@ def make_collage(collage_id: str, *, git_hub_key: str, q: str, size: tuple):
 
         contributors_stats.fetch()
 
-        tasks = TasksList()
-        for stats_chunks in divide_chunks(
-            contributors_stats.result, settings.MAX_FETCH_AVATARS_PER_THREAD
-        ):
-            tasks.add(target=fetch_contributors_avatars, kwargs={
-                'stats_chunks': stats_chunks,
-                'max_total_commits': contributors_stats.max_total_commits,
-                'collage': _COLLAGES[collage_id]['collage'],
-            }).start()
+        avatar_image_size_handler = functools.partial(
+            handle_avatar_image_size,
+            min_avatar_size=(64, 64),
+            max_avatar_size=(128, 128),
+            max_total_commits=contributors_stats.max_total_commits)
 
-        tasks.wait(timeout=60)
+        def add_avatar_to_collage(*, img_data, total_commits):
+            collage.add_img(handle_avatar_image(
+                img_data,
+                margins=(5, 5),
+                avatar_image_size_handler=functools.partial(
+                    avatar_image_size_handler,
+                    total_commits=total_commits)))
+
+        fetch_avatars(
+            contributors_stats=contributors_stats.result,
+            max_fetch_avatars_per_thread=settings.MAX_FETCH_AVATARS_PER_THREAD,
+            handler=add_avatar_to_collage)
 
     except Exception as e:
         logging.error(e, exc_info=True)
@@ -145,7 +186,7 @@ def make_collage_status_command(socket, params):
         socket.send_json({'status': 'error', 'code': 'collage_not_found'})
         return
 
-    socket.send_json({'status': collage['status']})
+    socket.send_json({'status': collage.get('status', 'pending')})
 
 
 @register_command(name='get_collage')

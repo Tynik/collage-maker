@@ -19,7 +19,7 @@ def make_collage():
         return jsonify({'error': 'X-GitHub-Access-Key header is required and cannot be empty'}), 400
 
     with zmq_context.socket(zmq.REQ) as socket:
-        socket.connect('tcp://collage_maker:5555')
+        socket.connect('tcp://handler:5555')
         socket.send_json({
             'cmd': 'make_collage',
             'params': {'q': request.json['q'], 'git_hub_key': git_hub_key, 'size': [900, 600]}})
@@ -30,7 +30,7 @@ def make_collage():
 @app.route('/collage/status/<uuid:collage_id>/', methods=['GET'])
 def collage_status(collage_id):
     with zmq_context.socket(zmq.REQ) as socket:
-        socket.connect('tcp://collage_maker:5555')
+        socket.connect('tcp://handler:5555')
         socket.send_json({'cmd': 'make_collage_status', 'params': {'id': str(collage_id)}})
         return jsonify(socket.recv_json())
 
@@ -38,7 +38,7 @@ def collage_status(collage_id):
 @app.route('/collage/<uuid:collage_id>/', methods=['GET'])
 def get_collage(collage_id):
     with zmq_context.socket(zmq.REQ) as socket:
-        socket.connect('tcp://collage_maker:5555')
+        socket.connect('tcp://handler:5555')
         socket.send_json({'cmd': 'get_collage', 'params': {'id': str(collage_id)}})
 
         return send_file(
