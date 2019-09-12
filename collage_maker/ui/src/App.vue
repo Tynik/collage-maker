@@ -36,6 +36,7 @@
                     },
                     body: JSON.stringify({q: this.searchQuery})
                 };
+                this.errors = [];
                 this.collageData = null;
                 this.makingCollageProcess = true;
                 fetch('http://127.0.0.1:8787/collage/', opts)
