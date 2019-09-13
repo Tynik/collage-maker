@@ -131,11 +131,11 @@ def handle_avatar_image_size(
     min_avatar_size: tuple, max_avatar_size: tuple, total_commits: int, max_total_commits: int
 ):
     new_width = min_avatar_size[0] + (
-        max_avatar_size[0] - min_avatar_size[0]) * int(total_commits / max_total_commits)
+        max_avatar_size[0] - min_avatar_size[0]) * (total_commits / max_total_commits)
     new_height = min_avatar_size[1] + (
-        max_avatar_size[0] - min_avatar_size[1]) * int(total_commits / max_total_commits)
+        max_avatar_size[1] - min_avatar_size[1]) * (total_commits / max_total_commits)
 
-    return new_width, new_height
+    return int(new_width), int(new_height)
 
 
 def add_avatar_to_collage(*, collage, img_data, total_commits, max_total_commits):
