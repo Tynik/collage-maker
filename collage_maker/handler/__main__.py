@@ -24,26 +24,36 @@ _COLLAGES = {}
 
 
 class Collage:
-    __slots__ = ('_x', '_y', '_img', '_size')
+    __slots__ = ('_x', '_y', '_img', '_size', '_transparent')
 
-    def __init__(self, *, size: tuple, background=(255, 255, 255), transparent=True):
+    def __init__(self, *, size: tuple, background: tuple = (255, 255, 255), transparent: bool = True):
         self._size = size
+        self._transparent = transparent
         self._img = Image.new(
             'RGB' + (transparent and 'A' or ''),
             size, transparent and (255, 0, 0, 0) or background)
 
-    def add_img(self, new_img, position_handler: callable):
+    def add_img(self, new_img, position_handler: typing.Callable[[tuple, tuple], tuple]):
         x, y = position_handler(self._size, new_img.size)
         self._img.paste(new_img, (x, y))
 
-    def save(self) -> io.BytesIO:
+    def save(self, quality: int = 95, format: typing.Optional[str] = None) -> io.BytesIO:
+        logging.warning(
+            not self._transparent or format == 'png',
+            'Another format unlike png with transparent mode will be ignored')
+
         output = io.BytesIO()
-        self._img.save(output, format='png', quality=95)
+        self._img.save(output, format=self._transparent and 'png' or format, quality=quality)
         output.seek(0)
         return output
 
 
-def fetch_avatars(*, contributors_stats, max_fetch_avatars_per_thread: int, avatar_handler: callable, timeout=60):
+def fetch_avatars(
+    *, contributors_stats,
+    max_fetch_avatars_per_thread: int,
+    avatar_handler: callable,
+    timeout=60
+):
     def loader(*, stats_chunk: typing.List[tuple]):
         for avatar_url, total_commits in stats_chunk:
             img_response = requests.get(avatar_url, stream=True)
@@ -174,7 +184,7 @@ def make_collage(collage_id: str, *, git_hub_key: str, q: str, size: tuple):
         _COLLAGES[collage_id]['info']['avatars_number'] = len(contributors_stats.result)
 
 
-def divide_chunks(iterable, count_by) -> iter:
+def divide_chunks(iterable, count_by: int) -> iter:
     for i in range(0, len(iterable), count_by):
         yield iterable[i:i + count_by]
 
