@@ -1,8 +1,8 @@
 ### Collage of contributors any GitHub project by names coincidence
 
-To start the project please execute the next command in the console:
+To start the project please execute the following commands in the console:
 ```bash
-docker-compose up -d
+docker-compose build
+docker-compose run -e GIT_HUB_KEY="<put-your-git-hub-access-key>" GIT_HUB_SEARCH_QUERY="<search-query>" app
 ```
-The project will be assigned to `:8788` local port,
-so to open the main page of the project just go to the next link: http://127.0.0.1:8788
+The all downloaded avatars for each found project will appear in `avatars` folder.

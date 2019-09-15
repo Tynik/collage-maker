@@ -158,7 +158,7 @@ def make_collage(collage_id: str, *, git_hub_key: str, q: str, size: tuple):
 
     try:
         git_hub = Github(git_hub_key)
-        searched_reps = list(git_hub.search_repositories(q)[:settings.MAX_FETCH_REPOSITORIES_NUMBER])
+        searched_reps = list(git_hub.search_repositories(q)[:settings.SEARCH_GITHUB_REPOSITORIES_LIMIT])
 
         contributors_stats = ContributorsStats(
             searched_reps,

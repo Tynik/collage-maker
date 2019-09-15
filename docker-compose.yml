@@ -1,34 +1,14 @@
 version: '3.7'
 services:
-  handler:
-    image: collage-handler
-    container_name: collage-handler
+  app:
+    image: collage-maker
+    container_name: collage-maker
+    environment:
+      GIT_HUB_KEY: ${GIT_HUB_KEY}
+      GIT_HUB_SEARCH_QUERY: google
     build:
-      context: ./collage_maker
-      dockerfile: ./handler.Dockerfile
+      context: .
+      dockerfile: Dockerfile
     volumes:
-      - ./collage_maker/handler:/opt/app/handler
-  api:
-    image: collage-api
-    container_name: collage-api
-    build:
-      context: ./collage_maker
-      dockerfile: ./api.Dockerfile
-    ports:
-      - 8787:8000
-    volumes:
-      - ./collage_maker/api:/opt/app/api
-    depends_on:
-      - handler
-  ui:
-    image: collage-ui
-    container_name: collage-ui
-    build:
-      context: ./collage_maker
-      dockerfile: ./ui.Dockerfile
-    ports:
-      - 8788:8788
-    volumes:
-      - ./collage_maker/ui/src:/opt/app/src
-    depends_on:
-      - api
+      - ./collage_maker:/opt/app/collage_maker
+      - ./avatars:/tmp/avatars
