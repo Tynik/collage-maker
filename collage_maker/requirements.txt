@@ -1,4 +1,4 @@
 pyzmq==18.1.0
-Pillow==6.1.0
+Pillow==6.2.0
 requests==2.22.0
 PyGithub==1.43.8
